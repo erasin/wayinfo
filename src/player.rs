@@ -1,19 +1,113 @@
 use std::time::Duration;
 
-use clap::error::Result;
+use clap::{error::Result, Args, Subcommand, ValueEnum};
 use dbus::{
     arg,
     blocking::{stdintf::org_freedesktop_dbus::Properties, Connection},
 };
 
-use crate::{
-    args::{PlayerCommands, PlayerLoopArgs, PlayerLoopMode, PlayerShuffleArgs},
-    errors::Error,
-    waybar::WaybarData,
-};
+use crate::{errors::Error, waybar::WaybarData};
+
+#[derive(Subcommand)]
+pub enum PlayerCommands {
+    /// Player Identity
+    Player,
+    /// next song
+    Next,
+    /// previous song
+    Previous,
+    /// toggle play or pause
+    Toggle,
+    /// play
+    Play,
+    /// stop
+    Stop,
+    /// Playback status (Playing|Paused|Stopped)
+    Status,
+    /// Playing   , other 
+    StatusIcon,
+    /// title of song
+    Title,
+    /// artist of song
+    Artist,
+    /// album of song
+    Album,
+    /// cover of song
+    Cover,
+    /// Track Number of
+    TrackNumber,
+
+    /// Position time at playing
+    Position,
+    /// Position second at playing
+    Positions,
+    /// Length of song
+    Length,
+    /// Length second of song
+    Lengths,
+    // Percent,
+    Shuffle(PlayerShuffleArgs),
+
+    /// 循环模式
+    Loop(PlayerLoopArgs),
+
+    /// lyrics
+    Lyrics,
+
+    /// waybar format
+    Waybar,
+}
+
+#[derive(Args)]
+pub struct PlayerShuffleArgs {
+    #[arg(long)]
+    pub on: bool,
+    #[arg(long)]
+    pub off: bool,
+    #[arg(long)]
+    pub toggle: bool,
+}
+
+fn shuffle_tag(shuffle: bool) -> &'static str {
+    match shuffle {
+        true => "On",
+        false => "Off",
+    }
+}
+
+#[derive(Args)]
+pub struct PlayerLoopArgs {
+    #[arg(long, value_enum)]
+    pub mode: Option<PlayerLoopMode>,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum PlayerLoopMode {
+    /// 默认
+    None,
+    /// 循环
+    Playlist,
+    /// 单曲
+    Track,
+}
+
+impl PlayerLoopMode {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PlayerLoopMode::None => "None",
+            PlayerLoopMode::Playlist => "Playlist",
+            PlayerLoopMode::Track => "Track",
+        }
+    }
+}
+
+impl Into<&'static str> for PlayerLoopMode {
+    fn into(self) -> &'static str {
+        self.as_str()
+    }
+}
 
 /// 使用 playerctl
-
 pub fn parse(cmd: &PlayerCommands) -> Result<(), Error> {
     let client = PlayerClient::new()?;
 
@@ -23,7 +117,6 @@ pub fn parse(cmd: &PlayerCommands) -> Result<(), Error> {
         PlayerCommands::Toggle => client.toggle(),
         PlayerCommands::Play => client.play(),
         PlayerCommands::Stop => client.stop(),
-
         PlayerCommands::Title => client.title(),
         PlayerCommands::Artist => client.artist(),
         PlayerCommands::Album => client.album(),
@@ -43,6 +136,90 @@ pub fn parse(cmd: &PlayerCommands) -> Result<(), Error> {
     }
 }
 
+enum PlayerAction {
+    Play,
+    Stop,
+    Previous,
+    Next,
+    Toggle,
+    // Seak
+    // SetPosition
+}
+
+impl PlayerAction {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PlayerAction::Play => "Play",
+            PlayerAction::Stop => "Stop",
+            PlayerAction::Previous => "Previous",
+            PlayerAction::Next => "Next",
+            PlayerAction::Toggle => "PlayPause",
+        }
+    }
+}
+
+impl Into<&'static str> for PlayerAction {
+    fn into(self) -> &'static str {
+        self.as_str()
+    }
+}
+
+enum PlayerProperty {
+    Metadata,
+    PlaybackStatus,
+    Position,
+    LoopStatus,
+    Shuffle,
+    // Rate
+    // Volume
+}
+
+impl PlayerProperty {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PlayerProperty::Metadata => "Metadata",
+            PlayerProperty::PlaybackStatus => "PlaybackStatus",
+            PlayerProperty::Position => "Position",
+            PlayerProperty::LoopStatus => "LoopStatus",
+            PlayerProperty::Shuffle => "Shuffle",
+        }
+    }
+}
+
+impl Into<&'static str> for PlayerProperty {
+    fn into(self) -> &'static str {
+        self.as_str()
+    }
+}
+
+enum PlayerMetadata {
+    Title,
+    Artist,
+    Album,
+    ArtUrl,
+    TrackNumber,
+    Length,
+}
+
+impl PlayerMetadata {
+    fn as_str(&self) -> &'static str {
+        match self {
+            PlayerMetadata::Title => "xesam:title",
+            PlayerMetadata::Artist => "xesam:artist",
+            PlayerMetadata::Album => "xesam:album",
+            PlayerMetadata::ArtUrl => "xesam:artUrl",
+            PlayerMetadata::TrackNumber => "xesam:trackNumber",
+            PlayerMetadata::Length => "mpris:length",
+        }
+    }
+}
+
+impl Into<&'static str> for PlayerMetadata {
+    fn into(self) -> &'static str {
+        self.as_str()
+    }
+}
+
 pub struct PlayerClient {
     conn: Connection,
     id: String,
@@ -50,32 +227,40 @@ pub struct PlayerClient {
     // proxy: Proxy<'a, &'b Connection>,
 }
 
+const DBUS_PLAYER: &'static str = "org.mpris.MediaPlayer2.Player";
+const DBUS_MEDIA_PLAYER: &'static str = "org.mpris.MediaPlayer2";
+
 impl PlayerClient {
     pub fn new() -> Result<PlayerClient, Error> {
+        // if use mpd, with mpd-mpris.
         let id = "org.mpris.MediaPlayer2.playerctld".to_owned();
         let path = "/org/mpris/MediaPlayer2".to_owned();
         let conn = Connection::new_session()?;
         return Ok(PlayerClient { conn, id, path });
     }
 
-    fn get_metadata(&self, key: &str) -> Result<String, Error> {
+    fn get_metadata(&self, key: PlayerMetadata) -> Result<String, Error> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
             Duration::from_millis(5000),
         );
 
-        let metadata: arg::PropMap = proxy.get("org.mpris.MediaPlayer2.Player", "Metadata")?;
+        let metadata: arg::PropMap = proxy.get(DBUS_PLAYER, PlayerProperty::Metadata.into())?;
 
-        // (<{'xesam:artist': <['milet']>, 'mpris:artUrl': <'file:///home/erasin/.cache/amberol/covers/0946e0166b73dabc1fa60b0a462d7180e52f5c97b6ef5a1cebc765db97ed68a0.png'>, 'xesam:title': <'Who I Am'>, 'mpris:length': <'203000000'>, 'xesam:album': <'Who I Am'>}>,)
+        // 'xesam:artist': <['milet']>,
+        // 'mpris:artUrl': <'file:///../.cache/covers/xxx.png'>,
+        // 'xesam:title': <'Who I Am'>,
+        // 'mpris:length': <'203000000'>,
+        // 'xesam:album': <'Who I Am'>
 
         let err_none = Error::Player {
             msg: "没有找到相应的标签".to_owned(),
         };
 
         match key {
-            "xesam:artist" => {
-                let strs: Option<&Vec<String>> = arg::prop_cast(&metadata, key);
+            PlayerMetadata::Artist => {
+                let strs: Option<&Vec<String>> = arg::prop_cast(&metadata, key.as_str());
 
                 if let Some(strs) = strs {
                     Ok(strs.join(","))
@@ -86,7 +271,7 @@ impl PlayerClient {
 
             // string
             _ => {
-                let str: Option<&String> = arg::prop_cast(&metadata, key);
+                let str: Option<&String> = arg::prop_cast(&metadata, key.as_str());
 
                 if let Some(str) = str {
                     Ok(str.clone())
@@ -97,14 +282,14 @@ impl PlayerClient {
         }
     }
 
-    fn get_property_string(&self, key: &str) -> Result<String, Error> {
+    fn get_property_string(&self, key: PlayerProperty) -> Result<String, Error> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
             Duration::from_millis(5000),
         );
 
-        let status: String = proxy.get("org.mpris.MediaPlayer2.Player", key)?;
+        let status: String = proxy.get(DBUS_PLAYER, key.into())?;
 
         Ok(status)
     }
@@ -116,19 +301,19 @@ impl PlayerClient {
             Duration::from_millis(5000),
         );
 
-        proxy.set("org.mpris.MediaPlayer2.Player", key, value)?;
+        proxy.set(DBUS_PLAYER, key, value)?;
 
         Ok(())
     }
 
-    fn action(&self, key: &str) -> Result<(), Error> {
+    fn action(&self, key: PlayerAction) -> Result<(), Error> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
             Duration::from_millis(5000),
         );
 
-        let (): () = proxy.method_call("org.mpris.MediaPlayer2.Player", key, ())?;
+        let (): () = proxy.method_call(DBUS_PLAYER, key.as_str(), ())?;
 
         Ok(())
     }
@@ -142,7 +327,7 @@ impl PlayerClient {
         );
 
         // let id: String = proxy.get("org.mpris.MediaPlayer2", "Identity")?;
-        let id: String = proxy.get("org.mpris.MediaPlayer2", "DesktopEntry")?;
+        let id: String = proxy.get(DBUS_MEDIA_PLAYER, "DesktopEntry")?;
 
         println!("{id}");
 
@@ -150,51 +335,51 @@ impl PlayerClient {
     }
 
     pub fn next(&self) -> Result<(), Error> {
-        self.action("Next")
+        self.action(PlayerAction::Next)
     }
 
     pub fn previous(&self) -> Result<(), Error> {
-        self.action("Previous")
+        self.action(PlayerAction::Previous)
     }
 
     pub fn toggle(&self) -> Result<(), Error> {
-        self.action("PlayPause")
+        self.action(PlayerAction::Toggle)
     }
 
     pub fn play(&self) -> Result<(), Error> {
-        self.action("Play")
+        self.action(PlayerAction::Play)
     }
 
     pub fn stop(&self) -> Result<(), Error> {
-        self.action("Stop")
+        self.action(PlayerAction::Stop)
     }
 
     pub fn title(&self) -> Result<(), Error> {
-        let title = self.get_metadata("xesam:title")?;
+        let title = self.get_metadata(PlayerMetadata::Title)?;
         println!("{title}");
         Ok(())
     }
 
     pub fn artist(&self) -> Result<(), Error> {
-        let artist = self.get_metadata("xesam:artist")?;
+        let artist = self.get_metadata(PlayerMetadata::Artist)?;
         println!("{artist}");
         Ok(())
     }
 
     pub fn album(&self) -> Result<(), Error> {
-        let album = self.get_metadata("xesam:album")?;
+        let album = self.get_metadata(PlayerMetadata::Album)?;
         println!("{album}");
         Ok(())
     }
 
     pub fn status(&self) -> Result<(), Error> {
-        let status = self.get_property_string("PlaybackStatus")?;
+        let status = self.get_property_string(PlayerProperty::PlaybackStatus)?;
         println!("{status}");
         Ok(())
     }
 
     pub fn get_status_icon(&self) -> Result<String, Error> {
-        let status = self.get_property_string("PlaybackStatus")?;
+        let status = self.get_property_string(PlayerProperty::PlaybackStatus)?;
         let icon = match status.as_str() {
             "Playing" => "",
             // "Paused"| "Stopped",
@@ -211,7 +396,7 @@ impl PlayerClient {
     }
 
     pub fn cover(&self) -> Result<(), Error> {
-        let cover_url = self.get_metadata("xesam:artUrl")?;
+        let cover_url = self.get_metadata(PlayerMetadata::ArtUrl)?;
         println!("{cover_url}");
         // TODO write temp file
 
@@ -219,21 +404,21 @@ impl PlayerClient {
     }
 
     pub fn track_number(&self) -> Result<(), Error> {
-        let track_number = self.get_metadata("xesam:trackNumber")?;
+        let track_number = self.get_metadata(PlayerMetadata::TrackNumber)?;
         println!("{track_number}");
 
         Ok(())
     }
 
     pub fn length(&self) -> Result<(), Error> {
-        let length = self.get_metadata("mpris:length")?;
+        let length = self.get_metadata(PlayerMetadata::Length)?;
         let duration = length.parse::<u64>().unwrap_or_default();
         print_duration(duration);
         Ok(())
     }
 
     pub fn lengths(&self) -> Result<(), Error> {
-        let length = self.get_metadata("mpris:length")?;
+        let length = self.get_metadata(PlayerMetadata::Length)?;
         let duration = length.parse::<u64>().unwrap_or_default();
         println!("{}", duration / 1000000);
         Ok(())
@@ -246,7 +431,7 @@ impl PlayerClient {
             Duration::from_millis(5000),
         );
 
-        let status: i64 = proxy.get("org.mpris.MediaPlayer2.Player", "Position")?;
+        let status: i64 = proxy.get(DBUS_PLAYER, PlayerProperty::Position.into())?;
 
         Ok(status as u64)
     }
@@ -270,7 +455,7 @@ impl PlayerClient {
             Duration::from_millis(5000),
         );
 
-        let status: bool = proxy.get("org.mpris.MediaPlayer2.Player", "Shuffle")?;
+        let status: bool = proxy.get(DBUS_PLAYER, PlayerProperty::Shuffle.into())?;
 
         Ok(status)
     }
@@ -282,7 +467,7 @@ impl PlayerClient {
             Duration::from_millis(5000),
         );
 
-        proxy.set("org.mpris.MediaPlayer2.Player", "Shuffle", value)?;
+        proxy.set(DBUS_PLAYER, "Shuffle", value)?;
 
         Ok(())
     }
@@ -298,29 +483,19 @@ impl PlayerClient {
         }
 
         let shuffle = self.get_shuffle()?;
-        let shuffle = match shuffle {
-            true => "On",
-            false => "Off",
-        };
+        let shuffle = shuffle_tag(shuffle);
+
         println!("{shuffle}");
 
         Ok(())
     }
 
     pub fn loop_mode(&self, args: &PlayerLoopArgs) -> Result<(), Error> {
-        let property_name = "LoopStatus";
-
         if let Some(mode) = args.mode {
-            let mode_set = match mode {
-                PlayerLoopMode::None => "None",
-                PlayerLoopMode::Playlist => "Playlist",
-                PlayerLoopMode::Track => "Track",
-            };
-
-            self.set_property_string(property_name, mode_set)?;
+            self.set_property_string(PlayerProperty::LoopStatus.into(), mode.into())?;
         }
 
-        let status = self.get_property_string(property_name)?;
+        let status = self.get_property_string(PlayerProperty::LoopStatus.into())?;
 
         println!("{status}");
 
@@ -333,8 +508,8 @@ impl PlayerClient {
     }
 
     pub fn waybar(&self) -> Result<(), Error> {
-        let title = self.get_metadata("xesam:title")?;
-        let artist = self.get_metadata("xesam:artist")?;
+        let title = self.get_metadata(PlayerMetadata::Title)?;
+        let artist = self.get_metadata(PlayerMetadata::Artist)?;
         let icon = self.get_status_icon()?;
 
         let data = WaybarData {

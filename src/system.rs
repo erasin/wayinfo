@@ -1,9 +1,26 @@
+use clap::{error::Result, Args, Subcommand};
 use sysinfo::System;
 
-use crate::{
-    args::{SysMemArgs, SystemCommands},
-    errors::Error,
-};
+use crate::errors::Error;
+
+#[derive(Subcommand)]
+pub enum SystemCommands {
+    Cpu,
+    Cpus,
+    Memory(SysMemArgs),
+    Disk,
+}
+
+#[derive(Args)]
+pub struct SysMemArgs {
+    /// total memory
+    #[arg(short, long)]
+    pub total: bool,
+
+    //// used memory
+    #[arg(short, long)]
+    pub usage: bool,
+}
 
 pub fn parse(cmd: &SystemCommands) -> Result<(), Error> {
     let mut data = Data::new();

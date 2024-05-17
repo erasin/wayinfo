@@ -1,10 +1,33 @@
 use std::fs;
 use std::str::FromStr;
 
+use clap::Args;
 use reqwest;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{args::WeatherArgs, errors::Error, waybar::WaybarData};
+use crate::{errors::Error, waybar::WaybarData};
+
+#[derive(Args)]
+pub(crate) struct WeatherArgs {
+    /// 城市
+    #[arg(short, long)]
+    pub city: String,
+
+    /// 接口密钥
+    #[arg(short, long)]
+    pub key: Option<String>,
+
+    /// 接口密钥文件
+    #[arg(long)]
+    pub key_file: Option<String>,
+
+    #[arg(short, long, default_value_t = 1)]
+    pub day: usize,
+
+    // #[arg(from_global)]
+    #[arg(long)]
+    pub waybar: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Weather {
