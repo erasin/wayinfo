@@ -5,7 +5,7 @@ use crate::{errors::Error, utils::shell_exec};
 #[derive(Subcommand)]
 pub enum TmuxCommands {
     /// split window and run
-    SplitRun(SplitArgs),
+    Run(SplitArgs),
     /// open file with helix editor
     Hx(OpenArgs),
 }
@@ -36,7 +36,7 @@ pub struct OpenArgs {
 
 pub fn parse(cmd: &TmuxCommands) -> Result<(), Error> {
     match cmd {
-        TmuxCommands::SplitRun(args) => split_run(args),
+        TmuxCommands::Run(args) => split_run(args),
         TmuxCommands::Hx(args) => hx_open(args),
     }
 }
