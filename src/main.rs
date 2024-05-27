@@ -2,6 +2,7 @@ mod args;
 mod errors;
 mod player;
 mod system;
+mod tmux;
 mod utils;
 mod waybar;
 mod weather;

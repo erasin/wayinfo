@@ -4,6 +4,7 @@ use crate::{
     errors::Error,
     player::{self, PlayerCommands},
     system::{self, SystemCommands},
+    tmux::{self, TmuxCommands},
     weather::{self, WeatherArgs},
 };
 
@@ -43,6 +44,13 @@ pub enum Commands {
         #[command(subcommand)]
         command: Option<PlayerCommands>,
     },
+
+    /// Tmux session,
+    #[command(version, about, long_about, arg_required_else_help(true))]
+    Tmux {
+        #[command(subcommand)]
+        command: Option<TmuxCommands>,
+    },
 }
 
 pub fn parse() -> Result<(), Error> {
@@ -57,6 +65,10 @@ pub fn parse() -> Result<(), Error> {
             Commands::Weather(args) => weather::parse(args),
             Commands::Player { command } => match command {
                 Some(player_cmd) => player::parse(player_cmd),
+                None => Ok(()),
+            },
+            Commands::Tmux { command } => match command {
+                Some(cmd) => tmux::parse(cmd),
                 None => Ok(()),
             },
         },
