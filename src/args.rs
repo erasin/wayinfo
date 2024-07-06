@@ -1,11 +1,11 @@
-use clap::{error::Result, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 
 use crate::{
-    errors::Error,
     player::{self, PlayerCommands},
     system::{self, SystemCommands},
     tmux::{self, TmuxCommands},
     weather::{self, WeatherArgs},
+    Result,
 };
 
 /// 为 wayland 提供信息工具
@@ -53,7 +53,7 @@ pub enum Commands {
     },
 }
 
-pub fn parse() -> Result<(), Error> {
+pub fn parse() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {

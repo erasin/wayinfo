@@ -1,7 +1,7 @@
-use clap::{error::Result, Args, Subcommand};
+use clap::{Args, Subcommand};
 use sysinfo::System;
 
-use crate::errors::Error;
+use crate::Result;
 
 #[derive(Subcommand)]
 pub enum SystemCommands {
@@ -22,7 +22,7 @@ pub struct SysMemArgs {
     pub usage: bool,
 }
 
-pub fn parse(cmd: &SystemCommands) -> Result<(), Error> {
+pub fn parse(cmd: &SystemCommands) -> Result<()> {
     let mut data = Data::new();
 
     match cmd {
@@ -45,7 +45,7 @@ impl Data {
         Data { sys }
     }
 
-    fn cpu(&mut self) -> Result<(), Error> {
+    fn cpu(&mut self) -> Result<()> {
         self.sys.refresh_cpu();
 
         let cpu = self.sys.global_cpu_info();
@@ -55,7 +55,7 @@ impl Data {
         Ok(())
     }
 
-    fn memory(&mut self, args: &SysMemArgs) -> Result<(), Error> {
+    fn memory(&mut self, args: &SysMemArgs) -> Result<()> {
         let mut count = self.sys.total_memory();
 
         if args.usage {

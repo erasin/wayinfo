@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 
-use crate::{errors::Error, utils::shell_exec};
+use crate::{utils::shell_exec, Result};
 
 #[derive(Subcommand)]
 pub enum TmuxCommands {
@@ -34,14 +34,14 @@ pub struct OpenArgs {
     pub file: String,
 }
 
-pub fn parse(cmd: &TmuxCommands) -> Result<(), Error> {
+pub fn parse(cmd: &TmuxCommands) -> Result<()> {
     match cmd {
         TmuxCommands::Run(args) => split_run(args),
         TmuxCommands::Hx(args) => hx_open(args),
     }
 }
 
-fn split_run(args: &SplitArgs) -> Result<(), Error> {
+fn split_run(args: &SplitArgs) -> Result<()> {
     let script = args.commands.join(" ");
 
     let split = match &args.vertical {
@@ -57,13 +57,13 @@ fn split_run(args: &SplitArgs) -> Result<(), Error> {
     let cmd = format!("tmux split-window {split} {project} & tmux send '{script}' Enter");
 
     let cmd = tmux_pane(cmd, script, &["sh", "tmux"])?;
-    let output = shell_exec(&cmd)?;
-    println!("{cmd} \n {output}");
+    let _output = shell_exec(&cmd)?;
+    // println!("{cmd} \n {output}");
 
     Ok(())
 }
 
-fn hx_open(args: &OpenArgs) -> Result<(), Error> {
+fn hx_open(args: &OpenArgs) -> Result<()> {
     let project = args.project.clone();
     let file = args.file.clone();
 
@@ -78,13 +78,13 @@ fn hx_open(args: &OpenArgs) -> Result<(), Error> {
     let script = format!(":o {file}");
 
     let cmd = tmux_pane(cmd, script, &["hx"])?;
-    let output = shell_exec(&cmd)?;
-    println!("{cmd} \n {output}");
+    let _output = shell_exec(&cmd)?;
+    // println!("{cmd} \n {output}");
 
     Ok(())
 }
 
-fn tmux_pane(cmd: String, script: String, ends: &[&str]) -> Result<String, Error> {
+fn tmux_pane(cmd: String, script: String, ends: &[&str]) -> Result<String> {
     let has_pane =
         shell_exec("tmux list-panes -F \"#{window_index} #{pane_index} #{pane_current_command}\"")?;
 
@@ -96,8 +96,6 @@ fn tmux_pane(cmd: String, script: String, ends: &[&str]) -> Result<String, Error
         .last()
     {
         let parts: Vec<&str> = has.split_whitespace().collect();
-
-        // println!("O1: {has} ");
 
         if parts.len() == 3 {
             let window_id = parts[0];

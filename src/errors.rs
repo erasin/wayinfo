@@ -18,8 +18,8 @@ pub enum Error {
     #[error("Player Get failed: {msg}")]
     Player { msg: String },
 
-    #[error(transparent)]
-    ValidatorError(#[from] validator::ValidationError),
+    // #[error(transparent)]
+    // ValidatorError(#[from] validator::ValidationError),
 
     // #[error("unknown")]
     // Unknown,
@@ -31,4 +31,10 @@ pub enum Error {
 
     #[error("Weather Request failed:{code}")]
     WeatherResponseError { code: StatusCode },
+}
+
+impl<T> From<Error> for crate::Result<T> {
+    fn from(val: Error) -> Self {
+        Err(Box::new(val))
+    }
 }

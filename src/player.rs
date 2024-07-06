@@ -1,11 +1,12 @@
 use std::time::Duration;
 
-use clap::{error::Result, Args, Subcommand, ValueEnum};
+use clap::{Args, Subcommand, ValueEnum};
 use dbus::{
     arg,
     blocking::{stdintf::org_freedesktop_dbus::Properties, Connection},
 };
 
+use crate::Result;
 use crate::{errors::Error, waybar::WaybarData};
 
 #[derive(Subcommand)]
@@ -101,14 +102,14 @@ impl PlayerLoopMode {
     }
 }
 
-impl Into<&'static str> for PlayerLoopMode {
-    fn into(self) -> &'static str {
-        self.as_str()
+impl From<PlayerLoopMode> for &'static str {
+    fn from(val: PlayerLoopMode) -> Self {
+        val.as_str()
     }
 }
 
 /// 使用 playerctl
-pub fn parse(cmd: &PlayerCommands) -> Result<(), Error> {
+pub fn parse(cmd: &PlayerCommands) -> Result<()> {
     let client = PlayerClient::new()?;
 
     match cmd {
@@ -158,9 +159,9 @@ impl PlayerAction {
     }
 }
 
-impl Into<&'static str> for PlayerAction {
-    fn into(self) -> &'static str {
-        self.as_str()
+impl From<PlayerAction> for &'static str {
+    fn from(val: PlayerAction) -> Self {
+        val.as_str()
     }
 }
 
@@ -186,9 +187,9 @@ impl PlayerProperty {
     }
 }
 
-impl Into<&'static str> for PlayerProperty {
-    fn into(self) -> &'static str {
-        self.as_str()
+impl From<PlayerProperty> for &'static str {
+    fn from(val: PlayerProperty) -> Self {
+        val.as_str()
     }
 }
 
@@ -214,9 +215,9 @@ impl PlayerMetadata {
     }
 }
 
-impl Into<&'static str> for PlayerMetadata {
-    fn into(self) -> &'static str {
-        self.as_str()
+impl From<PlayerMetadata> for &'static str {
+    fn from(val: PlayerMetadata) -> Self {
+        val.as_str()
     }
 }
 
@@ -227,19 +228,19 @@ pub struct PlayerClient {
     // proxy: Proxy<'a, &'b Connection>,
 }
 
-const DBUS_PLAYER: &'static str = "org.mpris.MediaPlayer2.Player";
-const DBUS_MEDIA_PLAYER: &'static str = "org.mpris.MediaPlayer2";
+const DBUS_PLAYER: &str = "org.mpris.MediaPlayer2.Player";
+const DBUS_MEDIA_PLAYER: &str = "org.mpris.MediaPlayer2";
 
 impl PlayerClient {
-    pub fn new() -> Result<PlayerClient, Error> {
+    pub fn new() -> Result<PlayerClient> {
         // if use mpd, with mpd-mpris.
         let id = "org.mpris.MediaPlayer2.playerctld".to_owned();
         let path = "/org/mpris/MediaPlayer2".to_owned();
         let conn = Connection::new_session()?;
-        return Ok(PlayerClient { conn, id, path });
+        Ok(PlayerClient { conn, id, path })
     }
 
-    fn get_metadata(&self, key: PlayerMetadata) -> Result<String, Error> {
+    fn get_metadata(&self, key: PlayerMetadata) -> Result<String> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -265,7 +266,7 @@ impl PlayerClient {
                 if let Some(strs) = strs {
                     Ok(strs.join(","))
                 } else {
-                    Err(err_none)
+                    Err(err_none.into())
                 }
             }
 
@@ -276,13 +277,13 @@ impl PlayerClient {
                 if let Some(str) = str {
                     Ok(str.clone())
                 } else {
-                    Err(err_none)
+                    Err(err_none.into())
                 }
             }
         }
     }
 
-    fn get_property_string(&self, key: PlayerProperty) -> Result<String, Error> {
+    fn get_property_string(&self, key: PlayerProperty) -> Result<String> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -294,7 +295,7 @@ impl PlayerClient {
         Ok(status)
     }
 
-    fn set_property_string(&self, key: &str, value: &str) -> Result<(), Error> {
+    fn set_property_string(&self, key: &str, value: &str) -> Result<()> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -306,7 +307,7 @@ impl PlayerClient {
         Ok(())
     }
 
-    fn action(&self, key: PlayerAction) -> Result<(), Error> {
+    fn action(&self, key: PlayerAction) -> Result<()> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -319,7 +320,7 @@ impl PlayerClient {
     }
 
     /// 播放器 id
-    pub fn player(&self) -> Result<(), Error> {
+    pub fn player(&self) -> Result<()> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -334,51 +335,51 @@ impl PlayerClient {
         Ok(())
     }
 
-    pub fn next(&self) -> Result<(), Error> {
+    pub fn next(&self) -> Result<()> {
         self.action(PlayerAction::Next)
     }
 
-    pub fn previous(&self) -> Result<(), Error> {
+    pub fn previous(&self) -> Result<()> {
         self.action(PlayerAction::Previous)
     }
 
-    pub fn toggle(&self) -> Result<(), Error> {
+    pub fn toggle(&self) -> Result<()> {
         self.action(PlayerAction::Toggle)
     }
 
-    pub fn play(&self) -> Result<(), Error> {
+    pub fn play(&self) -> Result<()> {
         self.action(PlayerAction::Play)
     }
 
-    pub fn stop(&self) -> Result<(), Error> {
+    pub fn stop(&self) -> Result<()> {
         self.action(PlayerAction::Stop)
     }
 
-    pub fn title(&self) -> Result<(), Error> {
+    pub fn title(&self) -> Result<()> {
         let title = self.get_metadata(PlayerMetadata::Title)?;
         println!("{title}");
         Ok(())
     }
 
-    pub fn artist(&self) -> Result<(), Error> {
+    pub fn artist(&self) -> Result<()> {
         let artist = self.get_metadata(PlayerMetadata::Artist)?;
         println!("{artist}");
         Ok(())
     }
 
-    pub fn album(&self) -> Result<(), Error> {
+    pub fn album(&self) -> Result<()> {
         let album = self.get_metadata(PlayerMetadata::Album)?;
         println!("{album}");
         Ok(())
     }
 
-    pub fn status(&self) -> Result<(), Error> {
+    pub fn status(&self) -> Result<()> {
         let status = self.get_property_string(PlayerProperty::PlaybackStatus)?;
         println!("{status}");
         Ok(())
     }
 
-    pub fn get_status_icon(&self) -> Result<String, Error> {
+    pub fn get_status_icon(&self) -> Result<String> {
         let status = self.get_property_string(PlayerProperty::PlaybackStatus)?;
         let icon = match status.as_str() {
             "Playing" => "",
@@ -388,14 +389,14 @@ impl PlayerClient {
         Ok(icon.to_owned())
     }
 
-    pub fn status_icon(&self) -> Result<(), Error> {
+    pub fn status_icon(&self) -> Result<()> {
         let icon = self.get_status_icon()?;
         println!("{icon}");
 
         Ok(())
     }
 
-    pub fn cover(&self) -> Result<(), Error> {
+    pub fn cover(&self) -> Result<()> {
         let cover_url = self.get_metadata(PlayerMetadata::ArtUrl)?;
         println!("{cover_url}");
         // TODO write temp file
@@ -403,28 +404,28 @@ impl PlayerClient {
         Ok(())
     }
 
-    pub fn track_number(&self) -> Result<(), Error> {
+    pub fn track_number(&self) -> Result<()> {
         let track_number = self.get_metadata(PlayerMetadata::TrackNumber)?;
         println!("{track_number}");
 
         Ok(())
     }
 
-    pub fn length(&self) -> Result<(), Error> {
+    pub fn length(&self) -> Result<()> {
         let length = self.get_metadata(PlayerMetadata::Length)?;
         let duration = length.parse::<u64>().unwrap_or_default();
         print_duration(duration);
         Ok(())
     }
 
-    pub fn lengths(&self) -> Result<(), Error> {
+    pub fn lengths(&self) -> Result<()> {
         let length = self.get_metadata(PlayerMetadata::Length)?;
         let duration = length.parse::<u64>().unwrap_or_default();
         println!("{}", duration / 1000000);
         Ok(())
     }
 
-    pub fn get_position(&self) -> Result<u64, Error> {
+    pub fn get_position(&self) -> Result<u64> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -436,19 +437,19 @@ impl PlayerClient {
         Ok(status as u64)
     }
 
-    pub fn position(&self) -> Result<(), Error> {
+    pub fn position(&self) -> Result<()> {
         let duration = self.get_position()?;
         print_duration(duration);
         Ok(())
     }
 
-    pub fn positions(&self) -> Result<(), Error> {
+    pub fn positions(&self) -> Result<()> {
         let duration = self.get_position()?;
         println!("{}", duration / 1000000);
         Ok(())
     }
 
-    pub fn get_shuffle(&self) -> Result<bool, Error> {
+    pub fn get_shuffle(&self) -> Result<bool> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -460,7 +461,7 @@ impl PlayerClient {
         Ok(status)
     }
 
-    pub fn set_shuffle(&self, value: bool) -> Result<(), Error> {
+    pub fn set_shuffle(&self, value: bool) -> Result<()> {
         let proxy = self.conn.with_proxy(
             self.id.clone(),
             self.path.clone(),
@@ -472,7 +473,7 @@ impl PlayerClient {
         Ok(())
     }
 
-    pub fn shuffle(&self, args: &PlayerShuffleArgs) -> Result<(), Error> {
+    pub fn shuffle(&self, args: &PlayerShuffleArgs) -> Result<()> {
         if args.on {
             self.set_shuffle(true)?;
         } else if args.off {
@@ -490,7 +491,7 @@ impl PlayerClient {
         Ok(())
     }
 
-    pub fn loop_mode(&self, args: &PlayerLoopArgs) -> Result<(), Error> {
+    pub fn loop_mode(&self, args: &PlayerLoopArgs) -> Result<()> {
         if let Some(mode) = args.mode {
             self.set_property_string(PlayerProperty::LoopStatus.into(), mode.into())?;
         }
@@ -503,11 +504,11 @@ impl PlayerClient {
     }
 
     // pub fn get_lyrics(&self) -> Result<String, Error> {}
-    pub fn lyrics(&self) -> Result<(), Error> {
+    pub fn lyrics(&self) -> Result<()> {
         Ok(())
     }
 
-    pub fn waybar(&self) -> Result<(), Error> {
+    pub fn waybar(&self) -> Result<()> {
         let title = self.get_metadata(PlayerMetadata::Title)?;
         let artist = self.get_metadata(PlayerMetadata::Artist)?;
         let icon = self.get_status_icon()?;

@@ -2,10 +2,9 @@ use std::fs;
 use std::str::FromStr;
 
 use clap::Args;
-use reqwest;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::{errors::Error, waybar::WaybarData};
+use crate::{errors::Error, waybar::WaybarData, Result};
 
 #[derive(Args)]
 pub(crate) struct WeatherArgs {
@@ -41,14 +40,14 @@ struct Weather {
     power: String,
 }
 
-impl Into<WaybarData> for Weather {
-    fn into(self) -> WaybarData {
+impl From<Weather> for WaybarData {
+    fn from(val: Weather) -> Self {
         // class 根据不同的条件提供不同的 class
         let class = "wayinfo-weather-sun";
 
         WaybarData {
-            text: format!("{} {} {}󰔄", self.icon, self.weather, self.temp),
-            alt: Some(format!("{} {}", self.wind, self.power)),
+            text: format!("{} {} {}󰔄", val.icon, val.weather, val.temp),
+            alt: Some(format!("{} {}", val.wind, val.power)),
             tooltip: None,
             class: class.to_owned(),
             percentage: None,
@@ -163,7 +162,7 @@ fn weather_icon(s: &str) -> &str {
     }
 }
 
-fn parse_float<'de, D>(deserializer: D) -> Result<f64, D::Error>
+fn parse_float<'de, D>(deserializer: D) -> std::result::Result<f64, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -171,7 +170,7 @@ where
     f64::from_str(&s).map_err(serde::de::Error::custom)
 }
 
-fn get_weather(api_key: &str, city: &str) -> Result<WeatherData, Error> {
+fn get_weather(api_key: &str, city: &str) -> Result<WeatherData> {
     // 构建API请求URL
     let url = format!(
         "https://restapi.amap.com/v3/weather/weatherInfo?key={}&city={}&extensions=all&output=json",
@@ -179,24 +178,25 @@ fn get_weather(api_key: &str, city: &str) -> Result<WeatherData, Error> {
     );
 
     // 发送请求
-    let response = reqwest::blocking::get(&url)?;
+    let response = reqwest::blocking::get(url)?;
 
     if !response.status().is_success() {
-        return Err(Error::WeatherResponseError {
+        return Error::WeatherResponseError {
             code: response.status(),
-        });
+        }
+        .into();
     }
 
     let data: WeatherData = response.json()?;
     Ok(data)
 }
 
-pub fn parse(args: &WeatherArgs) -> Result<(), Error> {
+pub fn parse(args: &WeatherArgs) -> Result<()> {
     // let city = matches.value_of("city").unwrap();
     let city = args.city.clone();
 
     if args.key.is_none() && args.key_file.is_none() {
-        return Err(Error::WeatherKeyError);
+        return Error::WeatherKeyError.into();
     }
 
     let api_key = match args.key.clone() {
@@ -204,14 +204,14 @@ pub fn parse(args: &WeatherArgs) -> Result<(), Error> {
         None => match args.key_file.clone() {
             Some(key_file) => match fs::read_to_string(key_file) {
                 Ok(s) => s,
-                Err(_err) => return Err(Error::WeatherKeyError),
+                Err(_err) => return Error::WeatherKeyError.into(),
             },
             None => String::new(),
         },
     };
 
     if api_key.is_empty() {
-        return Err(Error::WeatherKeyError);
+        return Error::WeatherKeyError.into();
     }
 
     let data = get_weather(&api_key, &city)?;
@@ -219,7 +219,7 @@ pub fn parse(args: &WeatherArgs) -> Result<(), Error> {
     // let json_output = serde_json::to_string(&weather_data).unwrap();
 
     if data.status != "1" || data.forecasts.is_empty() || data.forecasts[0].casts.is_empty() {
-        return Err(Error::WeatherFailError);
+        return Error::WeatherFailError.into();
     }
 
     let casts = &data.forecasts[0].casts;

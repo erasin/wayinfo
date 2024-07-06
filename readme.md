@@ -57,6 +57,29 @@ wayinfo weather --waybar --city 上海 --key-file $HOME/.config/apikeys/gaode.tx
 
 > 如果使用 `mpd` 可以安装 `mpd-mpris` 服务以获得支持。
 
+## wayinfo 
 
+```jsonc
+{
+  "custom/weather": {
+    "format": "{}",
+    "format-alt": "{alt}",
+    "return-type": "json",
+    "exec": "wayinfo weather --waybar --city 上海 --key-file $HOME/.config/apikeys/gaode.txt 2> /dev/null",
+    "exec-if": "which wayinfo",
+    "on-click-right": "gnome-weather"
+  },
+  "custom/media": {
+    "format": "{}",
+    "return-type": "json",
+    "max-length": 85,
+    "interval": 5,
+    "exec": "wayinfo player waybar",
+    "on-click": "wayinfo player toggle",
+    "on-click-right": "wayinfo player next",
+    "on-click-middle": "niri msg spawn -- eww open --toggle music"
+  }
+}
+```
 
 
